@@ -1,16 +1,7 @@
 # RadioThermostat
 Raadio Thermostat CT80 control 
 
-# ,__         __,
-#  \)`\_..._/`(/
-#  .'  _   _  '.
-# /    o\ /o   \
-# |    .-.-.    |
-# |   /() ()\   |
-#  \  '^---^'  /
-#   '-..___..-`
-#     TG&PO®
-# #TGandPO twitter
+#TGandPO on twitter
 
 WORK IN PROGRESS> 
 

@@ -189,3 +189,4 @@ if	[ $run = "1" ]; then `curl --silent -d '{"'$set_mode'":'$target',"hold":'$hol
 #echo "r_time	 = "$r_time
 #echo "DATALOG	 = "$DATALOG
 #echo "away	 = "$away
+../therm/quary.sh

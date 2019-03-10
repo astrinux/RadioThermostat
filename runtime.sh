@@ -100,3 +100,4 @@ if	[ -z "$sun" ]; then			#
 	echo $h_rise,$h_tmp1,$h_day,$h_tmp2,$h_set,$h_tmp3,$h_night,$h_tmp4,$h_yskd > $s_filename			#
 	echo $c_rise,$c_tmp1,$c_day,$c_tmp2,$c_set,$c_tmp3,$c_night,$c_tmp4,$c_yskd >> $s_filename			#
 ###########################################################################################################################
+../therm/runtime.sh

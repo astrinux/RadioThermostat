@@ -1,0 +1,40 @@
+#!/bin/bash
+        #Open Weather Map Access you will need to change:
+                APPID="dd139b9a9c5330487d38537bc821ddaf"        # Add your Key here
+                id="5509952"                                    # Add your Locaton code here
+                units="imperial"                                # Add either Metric or imperial
+		cacert="cacert.pem" 
+        #Open Weather Map URL do not change:
+                location="id=$id&APPID=$APPID&units=$units"
+                openweather="https://api.openweathermap.org/data/2.5/weather"
+	#retrives cacert to local directory 
+		curl --silent --remote-name --time-cond cacert.pem https://curl.haxx.se/ca/cacert.pem
+        #pulls variables from web site:
+                weather=$(curl --cacert $cacert --silent -m 6 "$openweather?$location" | sed -e 's/[{}]/''/g; s/,/\\n/g') # pulls raw json data list out as line items.
+
+                echo "List of variables from URL:"
+                echo "*****************************************"
+                echo -e $weather
+                echo "*****************************************"
+
+        #Pulls temp from list of variables:
+                o_temp=`echo -e $weather | grep temp | cut -f3 -d: | sed 's/\.[^ ]*/ /g' | sed 's/\s*$//g'`
+                echo "Output Current Temperature: " $o_temp
+                echo "*****************************************"
+
+        #Parses Sunrise and Sun Set times in UNIX, Date, Minuets:
+
+                unix_sunrise=`echo -e $weather | grep sunrise | cut -f2 -d:`
+                rise=`date --date @$unix_sunrise +%T | awk -F: '{ print ($1 * 60) + $2}'`
+                risedate=`date --date @$unix_sunrise`
+
+                unix_sunset=`echo -e $weather | grep sunset | cut -f2 -d:`
+                set=`date --date @$unix_sunset +%T | awk -F: '{ print ($1 * 60) + $2}'`
+                setdate=`date --date @$unix_sunset`
+
+                echo "Sun Rise at Minuet: "$rise
+                echo "Sun Rise in Unix: "$unix_sunrise
+                echo "Sun Rise on Date: "$risedate
+                echo "Sun Set at Minuet: "$set
+                echo "Sunset in Unix: "$unix_sunset
+                echo "Sunset on Date: "$setdate

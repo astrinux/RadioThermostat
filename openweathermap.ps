@@ -1,16 +1,15 @@
 #!/bin/bash
         #Open Weather Map Access you will need to change:
-                APPID="dd139b9a9c5330487d38537bc821ddaf"        # Add your Key here
-                id="5509952"                                    # Add your Locaton code here
-                units="imperial"                                # Add either Metric or imperial
-		cacert="cacert.pem" 
-        #Open Weather Map URL do not change:
+                APPID="PUT YOUR KEY HERE"        # Add your Key here
+                id="ADD YOUR LOCATON HERE"       # Add your Locaton code here
+                units="imperial or metric"       # Add either Metric or imperial
+		        
+	#Open Weather Map URL do not change:
                 location="id=$id&APPID=$APPID&units=$units"
-                openweather="https://api.openweathermap.org/data/2.5/weather"
-	#retrives cacert to local directory 
-		curl --silent --remote-name --time-cond cacert.pem https://curl.haxx.se/ca/cacert.pem
+                openweather="http://api.openweathermap.org/data/2.5/weather"
+
         #pulls variables from web site:
-                weather=$(curl --cacert $cacert --silent -m 6 "$openweather?$location" | sed -e 's/[{}]/''/g; s/,/\\n/g') # pulls raw json data list out as line items.
+                weather=$(curl --silent -m 6 "$openweather?$location" | sed -e 's/[{}]/''/g; s/,/\\n/g') # pulls raw json data list out as line items.
 
                 echo "List of variables from URL:"
                 echo "*****************************************"

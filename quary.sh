@@ -1,6 +1,9 @@
 #!/bin/bash
 #Checks Outside and Inside temps and writes them to a CSV file
-#This is for development and use at your own risk. 
+#This is for development and use at your own risk.
+#By Tom Cook
+#Modified by Rdrake.  Simplified query to the thermostat and added fstate to tracked variables
+#Modified by: 
 #   ,__         __,
 #    \)`\_..._/`(/
 #    .'  _   _  '.
@@ -11,15 +14,13 @@
 #     '-..___..-`
 #
 #        TG&PO®
-# #TGandPO twitter
 ##################
 source	~/therm/config.sh											#
 ### file maintance
 if	[ -f $filename ]; then echo "File Exists" >> /dev/null 2>&1						#
 else	touch $filename												#
 	echo "Time,Outside,Inside,Target,Run" > $filename							#
-#	ln $filename $web/templog.csv;
-	fi									#
+	ln $filename $web/templog.csv; fi									#
 ###
 if	[ -f $t_filename ]; then echo "File Exists" >> /dev/null 2>&1						#
 else	touch $t_filename; fi											#
@@ -29,8 +30,11 @@ else	touch $EMAILMESSAGE; fi											#
 ### 					#######	Get data strings from themostat ########
 	THERMY=$(curl --silent -m 6 http://$thermostat/tstat | sed -e 's/[{}]/''/g; s/,/\\n/g')			#
 	DATALOG=`curl --silent -m 6 http://$thermostat/tstat/datalog`						#
+### retrives cacert to local directory 
+	curl --silent --remote-name --time-cond cacert.pem https://curl.haxx.se/ca/cacert.pem
 ###					#######	Get Outside temp ########
-	o_temp=`curl --silent -m 5 "http://$wunderground=$location#conditions" | sed -n '/&deg;F/{p;q;}' | sed -e 's/.*<b>//' -e 's/<.*//' | sed 's/\.[^ ]*/ /g'`						#
+	weather=$(curl --silent -m 6 "$openweather?$location" | sed -e 's/[{}]/''/g; s/,/\\n/g')
+	o_temp=`echo -e $weather | grep temp | cut -f3 -d: | sed 's/\.[^ ]*/ /g' | sed 's/\s*$//g'`
 	if [ -z "$o_temp" ]; then o_temp=`tail -n 1 $filename | cut -f2 -d,`; fi				#
 ### 					#######	define verables ########
 ### ECHO Mobile Devices presence 0 or 1
@@ -69,7 +73,7 @@ else	touch $EMAILMESSAGE; fi											#
 ### This quarter Hour runtime for heating
 	q_heat=$(($c_heat - $p_heat))										#
 ### ECHO Previos Window condition "open '1' or closed '0'" 
-	windows=`tail -n 1 $t_filename | cut -f6 -d,`; if [ -z "$windows" ]; then windows="0"; fi		#
+	windows=`tail -n 1 $t_filename | cut -f6 -d,`; if [ -z "$windows" ]; then windows=`tail -n 1 $t2_filename | cut -f6 -d,`; fi		#
 ### ECHO Scheduled temp values
 ### Cool
 	c_skd1=`tail -n 1 $s_filename | cut -f1 -d,`								#
@@ -105,13 +109,15 @@ elif	[[ ( "$r_time" -ge "$h_skd4" ) ]]; then	h_skd="$h_tmp4"; fi						#
 ###
 	med_temp=$(((($c_skd - $h_skd) / 2) + $h_skd))
 ### ECHO notice: change window status
-if	[[ ( "$o_temp" -lt "$c_skd" ) && ( "$i_temp2" -gt "$med_temp" ) && ( "$clients" -eq "1" ) && ( "$windows" -eq "0" ) ]]; then windows="1"								#
+if	[[ ( "$o_temp" -lt "$target" ) && ( "$i_temp2" -gt "$med_temp" ) && ( "$clients" -eq "1" ) && ( "$windows" -eq "0" ) ]]; then windows="1"								#
 	msg="1" && printf "Please open windows. Outside temp "$o_temp", target " >> $EMAILMESSAGE; fi														#
-if	[[ ( "$o_temp" -gt "$c_skd" ) || ( "$i_temp2" -lt "$med_temp" ) && ( "$clients" -eq "1" ) && ( "$windows" -eq "1" ) ]]; then windows="0"								#
+if	[[ (( "$o_temp" -gt "$target" ) || ( "$i_temp2" -lt "$med_temp" )) && ( "$clients" -eq "1" ) && ( "$windows" -eq "1" ) ]]; then windows="0"								#
 	msg="1" && printf "Please close windows. Outside temp "$o_temp", target " >> $EMAILMESSAGE; fi														#
 ### Set Mode
-if	[[ ( "$tmode" -eq "1" ) && ( "$i_temp2" -ge "$c_skd" ) && ( "$windows" -eq "0" ) ]]; then tmode="2" && `curl --silent -d '{"tmode":2}' http://$thermostat/tstat` >> /dev/null 2>&1			#
-elif	[[ ( "$tmode" -eq "2" ) && ( "$i_temp2" -le "$h_skd" ) ]]; then tmode="1" && `curl --silent -d '{"tmode":1}' http://$thermostat/tstat` >> /dev/null 2>&1; fi						#
+if	[[ ( "$tmode" -eq "1" ) && ( "$i_temp2" -ge "$c_skd" ) ]]; then tmode="2" && `curl --silent -d '{"tmode":2}' http://$thermostat/tstat` >> /dev/null 2>&1
+	target="$c_skd"; fi						#
+if	[[ ( "$tmode" -eq "2" ) && ( "$i_temp2" -le "$h_skd" ) ]]; then tmode="1" && `curl --silent -d '{"tmode":1}' http://$thermostat/tstat` >> /dev/null 2>&1
+	target="$h_skd"; fi						#
 ### echo $var set by tmode; $sked, $runtime, $quater, $away 
 if	[ "$tmode" = "1" ]; then sked="$h_skd"									#
 	runtime="$c_heat"											#
@@ -132,18 +138,23 @@ if	[[ ( "$clients" -eq "1" ) && ( "$hold" -eq "1" ) && ( "$fstate" -eq "0" ) ]];
 	override="0"												#
 	msg="1"													#
 	run="1"													#
-elif	[[ ( "$clients" -eq "1" ) && ( "$hold" -eq "1" ) && ( "$fstate" -eq "1" ) && ( "$windows" -eq "0" ) ]]; then echo "0,$client1,$client2" > $c_filename && exit; fi					#
+elif	[[ ( "$clients" -eq "1" ) && ( "$hold" -eq "1" ) && ( "$fstate" -eq "1" ) && ( "$windows" -eq "0" ) ]]; then echo "0,$client1,$client2" > $c_filename && exit; fi													#
 ###
-#if	[[ ( "$tmode" -eq "2" ) && ( "$client1" -eq "1" ) && ( "$hold" -eq "0" ) && ( "$target" -gt "$c_spec" ) ]]; then target="$c_spec"									#
-#	run="1"; fi												#
+if	[[ ( "$tmode" -eq "2" ) && ( "$client1" -eq "1" ) && ( "$hold" -eq "0" ) && ( "$target" -gt "$c_spec" ) ]]; then target="$c_spec"
+	run="1"; fi 												#
 ###
-#if	[[ ( "$client1" -eq "0" ) && ( "$client2" -eq "1" ) && ( "$override" -eq "1" ) && ( "$windows" -eq "0" ) ]]; then target="$sked" && printf "Returning to schedule. Target set to " >> $EMAILMESSAGE 	#
-#	msg="1"													#
-#	override="0"												#
-#	run="1"; fi												#
-### Follow sked while away. 
-if	[[ ( "$target" -ne "$away" ) && ( "$target" -ne "$sked" ) && ( "$hold" -eq "1" ) ]]; then target="$sked" && printf "Following skedule as instructed. Target set to " >> $EMAILMESSAGE 			#
+if	[[ ( "$client1" -eq "0" ) && ( "$client2" -eq "1" ) && ( "$override" -eq "1" ) ]]; then target="$sked" && printf "Returning to schedule. Target set to " >> $EMAILMESSAGE
 	msg="1"													#
+	override="0"												#
+	run="1"; fi												#
+### Follow sked while away. 
+if	[[ ( "$target" -ne "$away" ) && ( "$target" -gt "$sked" ) && ( "$hold" -eq "1" ) ]]; then target="$sked" && printf "Following skedule as instructed. Target set to " >> $EMAILMESSAGE 			#
+	msg="1"													#
+	run="1"; fi												#
+### Fan on for cool down 
+if	[[ ( "$target" -lt "80" ) && ( "$o_temp" -gt "100" ) ]]; then fmode="2"										 	#
+	run="1"
+else	fmode="0"													#
 	run="1"; fi												#
 ### if nul set $run and $msg to zero
 if	[ -z "$run" ]; then run="0"; fi										#
@@ -154,11 +165,11 @@ if	[ "$tmode" -eq "1" ]; then set_mode="t_heat"; else set_mode="t_cool"; fi  			
 	echo $r_time,$c_heat,$q_heat,$c_cool,$q_cool,$windows >> $t_filename					#
 ###
 #run="0"				#######	Send changes to thermostat #######
-if	[ $run = "1" ]; then `curl --silent -d '{"'$set_mode'":'$target',"hold":'$hold',"override":'$override'}' http://$thermostat/tstat` >> /dev/null 2>&1; fi						#
+if	[ $run = "1" ]; then `curl --silent -d '{"'$set_mode'":'$target',"hold":'$hold',"override":'$override',"fmode":'$fmode'}' http://$thermostat/tstat` >> /dev/null 2>&1; fi				#
 ###				#######	Send an email using /bin/mail ######
-#if	[ $msg = "1" ]; then printf $target". Inside temp "$i_temp". Run time today "$runtime" minutes." >> $EMAILMESSAGE && /bin/mail -s "$SUBJECT" "$TO" -- -r "$FROM" < $EMAILMESSAGE			#
+if	[ $msg = "1" ]; then printf $target". Inside temp "$i_temp". Run time today "$runtime" minutes." >> $EMAILMESSAGE && /bin/mail -s "$SUBJECT" "$TO" -- -r "$FROM" < $EMAILMESSAGE			#
 #	echo `cat $EMAILMESSAGE` 
-#	cat /dev/null > $EMAILMESSAGE; fi									#
+	cat /dev/null > $EMAILMESSAGE; fi									#
 #
 #############################################################################################################################################################################################################
 #echo "filename	 = "$filename
@@ -189,4 +200,4 @@ if	[ $run = "1" ]; then `curl --silent -d '{"'$set_mode'":'$target',"hold":'$hol
 #echo "r_time	 = "$r_time
 #echo "DATALOG	 = "$DATALOG
 #echo "away	 = "$away
-../therm/quary.sh
+#echo "fmode      = "$fmode
